@@ -3,6 +3,9 @@
 /.project
 /examples/yield/
 *.o
+*.swn
+*.swp
+*.swo
 *.lo
 *~
 *.so
