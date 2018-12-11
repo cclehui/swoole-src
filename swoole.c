@@ -1242,11 +1242,14 @@ PHP_RINIT_FUNCTION(swoole)
     swoole_open_remote_debug();
 #endif
 
+    php_printf("rrrrrrrrrrr  111111111111111\n");
+
     return SUCCESS;
 }
 
 PHP_RSHUTDOWN_FUNCTION(swoole)
 {
+    php_printf("rrrrrrrrrrr  999999999999999\n");
     //clear pipe buffer
     if (swIsWorker())
     {
