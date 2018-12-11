@@ -1250,6 +1250,7 @@ PHP_RINIT_FUNCTION(swoole)
 PHP_RSHUTDOWN_FUNCTION(swoole)
 {
     php_printf("rrrrrrrrrrr  999999999999999\n");
+    return SUCCESS;
     //clear pipe buffer
     if (swIsWorker())
     {
