@@ -268,6 +268,8 @@ int sw_coro_create(zend_fcall_info_cache *fci_cache, zval **argv, int argc, zval
     {
         zval *target;
         target = ZEND_CALL_ARG(call, i + 1);
+        //zend_print_zval_r(target, 1);
+        //zend_print_zval_r(argv[i], 1);
         ZVAL_COPY(target, argv[i]);
     }
 

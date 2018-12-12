@@ -10,15 +10,71 @@
  +----------------------------------------------------------------------+
  */
 
-#ifndef SWOOLE_FPM_H_
-#define SWOOLE_FPM_H_
+#include "php_swoole.h"
+#include "swoole_php_runner.h"
+#include "php_variables.h"
+#include "zend_globals_macros.h"
+#include "Zend/zend_language_scanner.h"
 
-#include "ext/standard/file.h"
-#include "zend_extensions.h"
-#include "Zend/zend_list.h"
+zend_class_entry swoole_php_runner_ce;
+zend_class_entry *swoole_php_runner_class_entry_ptr;
 
-extern zend_class_entry swoole_fpm_server_ce;
-extern zend_class_entry *swoole_fpm_server_class_entry_ptr;
+static PHP_METHOD(swoole_php_runner, run);
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_php_runner_run, 0, 0, 2)
+ZEND_END_ARG_INFO()
+
+
+const zend_function_entry swoole_php_runner_methods[] =
+{
+    PHP_ME(swoole_php_runner, run,         arginfo_swoole_php_runner_run, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
+    PHP_FE_END
+};
+
+
+void swoole_php_runner_init(int module_number TSRMLS_DC)
+{
+    SWOOLE_INIT_CLASS_ENTRY(swoole_php_runner_ce, "swoole_php_runner", "Swoole\\Php\\Runner", swoole_php_runner_methods);
+    //swoole_php_runner_class_entry_ptr = sw_zend_register_internal_class_ex(&swoole_php_runner_ce, swoole_server_class_entry_ptr, "swoole_server" TSRMLS_CC);
+    swoole_php_runner_class_entry_ptr = zend_register_internal_class(&swoole_php_runner_ce TSRMLS_CC);
+    SWOOLE_CLASS_ALIAS(swoole_php_runner, "Swoole\\Fpm\\Server");
+
+}
+
+
+//执行php程序
+static PHP_METHOD(swoole_php_runner, run)
+{
+    php_printf("execute_file, 11111111111\n");
+
+    if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
+        SG(server_context) = NULL;
+        RETURN_FALSE;
+    }
+
+    zend_file_handle file_handle;
+
+    char *filename = "/var/www/swoole/my_index.php";
+
+    if (zend_stream_open(filename, &file_handle) == FAILURE) {
+        php_printf("execute_file, eeeeeeeeeeee\n");
+    }
+
+    php_printf("execute_file, 6666, %s, %s\n", file_handle.filename, ZSTR_VAL(file_handle.opened_path));
+
+
+    zend_try {
+        php_execute_script(&file_handle);
+    } zend_end_try();
+
+    swoole_php_request_shutdown();
+
+    php_printf("execute_file, 99999999999\n");
+
+    RETURN_TRUE;
+}
+
+/*****************************************************/
 
 /* {{{ php_free_request_globals
  */
@@ -235,7 +291,7 @@ void swoole_shutdown_executor(void) /* {{{ */
     php_printf("ssssssssssss, 33333333333\n");
 
 	zend_try {
-		//zend_llist_destroy(&CG(open_files));
+		zend_llist_destroy(&CG(open_files));
 	} zend_end_try();
 
 	zend_try {
@@ -255,9 +311,10 @@ void swoole_shutdown_executor(void) /* {{{ */
     php_printf("ssssssssssss, 5555555555555555\n");
 
 	zend_try {
-		//zend_objects_store_free_object_storage(&EG(objects_store));
+		zend_objects_store_free_object_storage(&EG(objects_store));
 
-		zend_vm_stack_destroy();
+        //这个去掉  swoole 在用
+		//zend_vm_stack_destroy();
 
 		/* Destroy all op arrays */
 		if (EG(full_tables_cleanup)) {
@@ -276,8 +333,6 @@ void swoole_shutdown_executor(void) /* {{{ */
 	} zend_end_try();
 
     php_printf("ssssssssssss, 66666666666666\n");
-
-    //return;
 
 	zend_try {
 #if 0&&ZEND_DEBUG
@@ -312,4 +367,179 @@ void swoole_shutdown_executor(void) /* {{{ */
 	EG(active) = 0;
 }
 
-#endif /* SWOOLE_FPM_H_ */
+static void heredoc_label_dtor(zend_heredoc_label *heredoc_label) {
+    efree(heredoc_label->label);
+}
+
+#define SCNG    LANG_SCNG
+void shutdown_scanner(void)
+{
+	CG(parse_error) = 0;
+	RESET_DOC_COMMENT();
+	zend_stack_destroy(&SCNG(state_stack));
+	zend_ptr_stack_clean(&SCNG(heredoc_label_stack), (void (*)(void *)) &heredoc_label_dtor, 1);
+	zend_ptr_stack_destroy(&SCNG(heredoc_label_stack));
+	SCNG(on_event) = NULL;
+}
+#undef SCNG
+
+void shutdown_compiler(void) /* {{{ */
+{
+	zend_stack_destroy(&CG(loop_var_stack));
+	zend_stack_destroy(&CG(delayed_oplines_stack));
+	zend_hash_destroy(&CG(filenames_table));
+	zend_hash_destroy(&CG(const_filenames));
+	zend_arena_destroy(CG(arena));
+}
+
+
+//参考  zend_deactivate()
+ZEND_API void swoole_zend_deactivate(void) /* {{{ */
+{
+	/* we're no longer executing anything */
+	EG(current_execute_data) = NULL;
+
+	zend_try {
+		shutdown_scanner();
+	} zend_end_try();
+
+	/* shutdown_executor() takes care of its own bailout handling */
+	//shutdown_executor();
+	swoole_shutdown_executor();
+
+
+	zend_try {
+		zend_ini_deactivate();
+	} zend_end_try();
+
+	zend_try {
+		shutdown_compiler();
+	} zend_end_try();
+
+	zend_destroy_rsrc_list(&EG(regular_list));
+
+}
+/* }}} */
+
+//请求开始前的初始化操作
+//参考 php_request_startup
+static int swoole_php_request_startup() {
+
+    //SG(request_info) = NULL;
+    SG(sapi_headers).http_response_code = 200; 
+
+    if (FAILURE == php_request_startup()) {
+        return FAILURE;
+    }    
+
+    PG(during_request_startup) = 0; 
+
+    return SUCCESS;
+}
+
+//请求结束后的清理操作
+//参考 php_request_shutdown
+static int swoole_php_request_shutdown() {
+	zend_bool report_memleaks;
+
+	report_memleaks = PG(report_memleaks);
+
+	/* EG(current_execute_data) points into nirvana and therefore cannot be safely accessed
+	 * inside zend_executor callback functions.
+	 */
+	EG(current_execute_data) = NULL;
+
+	php_deactivate_ticks();
+
+	/* 1. Call all possible shutdown functions registered with register_shutdown_function() */
+	if (PG(modules_activated)) zend_try {
+		php_call_shutdown_functions();
+	} zend_end_try();
+
+	/* 2. Call all possible __destruct() functions */
+	zend_try {
+		zend_call_destructors();
+	} zend_end_try();
+
+	/* 3. Flush all output buffers */
+	zend_try {
+		zend_bool send_buffer = SG(request_info).headers_only ? 0 : 1;
+
+		if (CG(unclean_shutdown) && PG(last_error_type) == E_ERROR &&
+			(size_t)PG(memory_limit) < zend_memory_usage(1)
+		) {
+			send_buffer = 0;
+		}
+
+		if (!send_buffer) {
+			php_output_discard_all();
+		} else {
+			php_output_end_all();
+		}
+	} zend_end_try();
+
+	/* 4. Reset max_execution_time (no longer executing php code after response sent) */
+	zend_try {
+		zend_unset_timeout();
+	} zend_end_try();
+
+	/* 5. Call all extensions RSHUTDOWN functions */
+	if (PG(modules_activated)) {
+		zend_deactivate_modules();
+	}
+
+	/* 6. Shutdown output layer (send the set HTTP headers, cleanup output handlers, etc.) */
+	zend_try {
+		php_output_deactivate();
+	} zend_end_try();
+
+	/* 7. Free shutdown functions */
+	if (PG(modules_activated)) {
+		php_free_shutdown_functions();
+	}
+
+	/* 8. Destroy super-globals */
+	zend_try {
+		int i;
+
+		for (i=0; i<NUM_TRACK_VARS; i++) {
+			zval_ptr_dtor(&PG(http_globals)[i]);
+		}
+	} zend_end_try();
+
+	/* 9. free request-bound globals */
+	php_free_request_globals();
+
+	/* 10. Shutdown scanner/executor/compiler and restore ini entries */
+	//zend_deactivate();
+    //修改 部分zend_deactivate()的功能
+	swoole_zend_deactivate();
+
+	/* 11. Call all extensions post-RSHUTDOWN functions */
+	zend_try {
+		zend_post_deactivate_modules();
+	} zend_end_try();
+
+	/* 13. free virtual CWD memory */
+	virtual_cwd_deactivate();
+
+	/* 14. Destroy stream hashes */
+	zend_try {
+		php_shutdown_stream_hashes();
+	} zend_end_try();
+
+	/* 15. Free Willy (here be crashes) */
+	zend_interned_strings_restore();
+	zend_try {
+        //去掉这个 swoole有用到
+		//shutdown_memory_manager(CG(unclean_shutdown) || !report_memleaks, 0);
+	} zend_end_try();
+
+	/* 16. Reset max_execution_time */
+	zend_try {
+		zend_unset_timeout();
+	} zend_end_try();
+
+    return SUCCESS;
+}
+

@@ -397,7 +397,7 @@ if test "$PHP_SWOOLE" != "no"; then
         swoole_ringqueue.c \
         swoole_msgqueue.c \
         swoole_trace.c \
-        swoole_fpm.c \
+        swoole_php_runner.c \
         src/core/base.c \
         src/core/log.c \
         src/core/hashmap.c \
