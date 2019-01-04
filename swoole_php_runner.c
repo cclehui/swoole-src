@@ -24,6 +24,11 @@ static PHP_METHOD(swoole_php_runner, run);
 ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_php_runner_run, 0, 0, 2)
 ZEND_END_ARG_INFO()
 
+extern sapi_module_struct sapi_module;
+
+//全局输出变量  cclehui_test
+zend_string *output_buffer;
+
 
 const zend_function_entry swoole_php_runner_methods[] =
 {
@@ -45,12 +50,51 @@ void swoole_php_runner_init(int module_number TSRMLS_DC)
 //执行php程序
 static PHP_METHOD(swoole_php_runner, run)
 {
-    php_printf("execute_file, 11111111111\n");
+
+    zval *zserv;
+    zval *zfd;
+    zval *zfrom_id;
+    zend_string *zdata;
+    
+
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "zzzS", &zserv, &zfd, &zfrom_id, &zdata) == FAILURE) {
+        RETURN_FALSE;
+    }
+
+    if (!zserv) {
+        //swoole_error_log(SW_LOG_NOTICE, SW_ERROR_SESSION_NOT_EXIST, "connection[%d] is closed.", fd);
+        RETURN_FALSE;
+    }
+
+    server_receive_context receive_context; 
+    receive_context.zserv = zserv;
+    receive_context.zfd = zfd;
+    receive_context.zfrom_id = zfrom_id;
+    receive_context.zdata = zdata;
+
+    SG(server_context) = (void *)&receive_context;
+
+    zval send_data;
+    SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1);
+
+    zval send_retval;
+    zval function_name;
+    ZVAL_STRING(&function_name, "send");
+
+    zval params[2];
+    params[0] = *zfd;
+    params[1] = send_data;
+
+    class_call_user_method(&send_retval, swoole_server_class_entry_ptr, zserv, function_name, 2, params);
+
+    RETURN_TRUE; 
 
     if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
         SG(server_context) = NULL;
         RETURN_FALSE;
     }
+
+    //swoole_php_fatal_error(E_ERROR, "EEEEEEEEEEEEEEEEEEE");
 
     zend_file_handle file_handle;
 
@@ -60,16 +104,29 @@ static PHP_METHOD(swoole_php_runner, run)
         php_printf("execute_file, eeeeeeeeeeee\n");
     }
 
-    php_printf("execute_file, 6666, %s, %s\n", file_handle.filename, ZSTR_VAL(file_handle.opened_path));
 
+    int status = 0;
 
+    //zend_first_try 
+    /*
     zend_try {
+        status = 8888;
         php_execute_script(&file_handle);
+
+    } zend_catch {
+        status = 1001;
     } zend_end_try();
+    */
+
+    php_execute_script(&file_handle);
+    //php_printf("execute_file, 6666, %s, %s\n", file_handle.filename, ZSTR_VAL(file_handle.opened_path));
 
     swoole_php_request_shutdown();
 
-    php_printf("execute_file, 99999999999\n");
+
+    php_printf("execute_file, 99999999999, %d\n", status);
+
+    php_printf("php_output start, -----\n%s, -----end -----\n", ZSTR_VAL(output_buffer));
 
     RETURN_TRUE;
 }
@@ -245,7 +302,6 @@ void swoole_shutdown_executor(void) /* {{{ */
 		zend_stack_clean(&EG(user_exception_handlers), (void (*)(void *))ZVAL_PTR_DTOR, 1);
 	} zend_end_try();
 
-    php_printf("ssssssssssss, 222222222222222\n");
 
 	zend_try {
 		/* Cleanup static data for functions and arrays.
@@ -288,8 +344,6 @@ void swoole_shutdown_executor(void) /* {{{ */
 	} zend_end_try();
 
 
-    php_printf("ssssssssssss, 33333333333\n");
-
 	zend_try {
 		zend_llist_destroy(&CG(open_files));
 	} zend_end_try();
@@ -298,7 +352,6 @@ void swoole_shutdown_executor(void) /* {{{ */
 		clean_non_persistent_constants();
     } zend_end_try();
 
-    php_printf("ssssssssssss, 444444444444444444\n");
 	zend_try {
 		zend_close_rsrc_list(&EG(regular_list));
 	} zend_end_try();
@@ -308,7 +361,6 @@ void swoole_shutdown_executor(void) /* {{{ */
 		gc_collect_cycles();
 	}
 #endif
-    php_printf("ssssssssssss, 5555555555555555\n");
 
 	zend_try {
 		zend_objects_store_free_object_storage(&EG(objects_store));
@@ -331,8 +383,6 @@ void swoole_shutdown_executor(void) /* {{{ */
 			EG(symtable_cache_ptr)--;
 		}
 	} zend_end_try();
-
-    php_printf("ssssssssssss, 66666666666666\n");
 
 	zend_try {
 #if 0&&ZEND_DEBUG
@@ -421,9 +471,46 @@ ZEND_API void swoole_zend_deactivate(void) /* {{{ */
 }
 /* }}} */
 
+
+
+static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
+{
+
+    if (output_buffer == NULL) {
+        output_buffer = zend_string_init(str, str_length, 0);
+
+    } else {
+        size_t old_length = ZSTR_LEN(output_buffer);
+        output_buffer = zend_string_realloc(output_buffer, old_length + str_length, 0);
+        memcpy(ZSTR_VAL(output_buffer) + old_length, str, str_length);
+    }
+
+    return str_length;
+}
+
+static void sapi_cli_flush(void *server_context) /* {{{ */
+{
+    //php_printf("wwwwwwwwwww, fffffffffff, %s\n", ZSTR_VAL(output_buffer));
+}
+
+static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
+{
+        fprintf(stderr, "sapi_cli_log_message, %s\n", message);
+}
+
+
 //请求开始前的初始化操作
 //参考 php_request_startup
 static int swoole_php_request_startup() {
+
+    if (output_buffer != NULL) {
+        zend_string_free(output_buffer);
+    }
+
+    //sapi 的output输出处理赋值
+    sapi_module.ub_write = sapi_cli_ub_write;
+    sapi_module.flush = sapi_cli_flush;
+    sapi_module.log_message = sapi_cli_log_message;
 
     //SG(request_info) = NULL;
     SG(sapi_headers).http_response_code = 200; 

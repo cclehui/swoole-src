@@ -1242,8 +1242,6 @@ PHP_RINIT_FUNCTION(swoole)
     swoole_open_remote_debug();
 #endif
 
-    php_printf("rrrrrrrrrrr  111111111111111\n");
-
     return SUCCESS;
 }
 
