@@ -58,12 +58,12 @@ static PHP_METHOD(swoole_php_runner, run)
     
 
     if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "zzzS", &zserv, &zfd, &zfrom_id, &zdata) == FAILURE) {
-        RETURN_FALSE;
+        goto out;
     }
 
     if (!zserv) {
-        //swoole_error_log(SW_LOG_NOTICE, SW_ERROR_SESSION_NOT_EXIST, "connection[%d] is closed.", fd);
-        RETURN_FALSE;
+        swWarn("serv object is null");
+        goto out;
     }
 
     server_receive_context receive_context; 
@@ -74,24 +74,8 @@ static PHP_METHOD(swoole_php_runner, run)
 
     SG(server_context) = (void *)&receive_context;
 
-    zval send_data;
-    SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1);
-
-    zval send_retval;
-    zval function_name;
-    ZVAL_STRING(&function_name, "send");
-
-    zval params[2];
-    params[0] = *zfd;
-    params[1] = send_data;
-
-    class_call_user_method(&send_retval, swoole_server_class_entry_ptr, zserv, function_name, 2, params);
-
-    RETURN_TRUE; 
-
     if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
-        SG(server_context) = NULL;
-        RETURN_FALSE;
+        goto out;
     }
 
     //swoole_php_fatal_error(E_ERROR, "EEEEEEEEEEEEEEEEEEE");
@@ -101,7 +85,7 @@ static PHP_METHOD(swoole_php_runner, run)
     char *filename = "/var/www/swoole/my_index.php";
 
     if (zend_stream_open(filename, &file_handle) == FAILURE) {
-        php_printf("execute_file, eeeeeeeeeeee\n");
+        swTrace("execute_file, eeeeeeeeeeee");
     }
 
 
@@ -119,15 +103,16 @@ static PHP_METHOD(swoole_php_runner, run)
     */
 
     php_execute_script(&file_handle);
-    //php_printf("execute_file, 6666, %s, %s\n", file_handle.filename, ZSTR_VAL(file_handle.opened_path));
+    swNotice("execute_file, 6666, %s\n", file_handle.filename);
 
     swoole_php_request_shutdown();
 
+    swNotice("execute_file, 99999999999, %d\n", status);
 
-    php_printf("execute_file, 99999999999, %d\n", status);
+    //swNotice("php_output start, -----\n%s, -----end -----\n", ZSTR_VAL(output_buffer));
 
-    php_printf("php_output start, -----\n%s, -----end -----\n", ZSTR_VAL(output_buffer));
-
+out:
+    SG(server_context) = NULL;
     RETURN_TRUE;
 }
 
@@ -475,7 +460,28 @@ ZEND_API void swoole_zend_deactivate(void) /* {{{ */
 
 static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
 {
+    zval send_data;
+    //SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1); 
+    SW_ZVAL_STRINGL(&send_data, str, str_length, 1); 
 
+
+    server_receive_context *receive_context = (server_receive_context *)SG(server_context);
+    zval *zserv = receive_context->zserv;
+
+    zval send_retval;
+    zval function_name;
+    ZVAL_STRING(&function_name, "send");
+
+    zval params[2];
+    params[0] = *(receive_context->zfd);
+    params[1] = send_data;
+
+    //调用 swoole_server->send() 方法 输出 output
+    class_call_user_method(&send_retval, swoole_server_class_entry_ptr, zserv, function_name, 2, params);
+
+    //swNotice("sapi_cli_ub_write, ooooooooooo , %s", str);
+
+    /*
     if (output_buffer == NULL) {
         output_buffer = zend_string_init(str, str_length, 0);
 
@@ -484,18 +490,21 @@ static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
         output_buffer = zend_string_realloc(output_buffer, old_length + str_length, 0);
         memcpy(ZSTR_VAL(output_buffer) + old_length, str, str_length);
     }
+    */
 
     return str_length;
 }
 
 static void sapi_cli_flush(void *server_context) /* {{{ */
 {
-    //php_printf("wwwwwwwwwww, fffffffffff, %s\n", ZSTR_VAL(output_buffer));
+    if (output_buffer != NULL) {
+        zend_string_free(output_buffer);
+    }
 }
 
 static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
 {
-        fprintf(stderr, "sapi_cli_log_message, %s\n", message);
+    swWarn("sapi_cli_log_message, %s\n", message);
 }
 
 
