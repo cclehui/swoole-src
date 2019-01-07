@@ -16,6 +16,7 @@
 
 #include "php_swoole.h"
 #include "swoole_http.h"
+#include "swoole_php_runner.h"
 #ifdef SW_COROUTINE
 #include "swoole_coroutine.h"
 #endif
@@ -87,6 +88,7 @@ zend_class_entry swoole_http_request_ce;
 zend_class_entry *swoole_http_request_class_entry_ptr;
 
 static int http_onReceive(swServer *serv, swEventData *req);
+static int http_request_run(swServer *serv, http_context *ctx);
 static void http_onClose(swServer *serv, swDataHead *ev);
 
 static int http_request_on_path(php_http_parser *parser, const char *at, size_t length);
@@ -1044,12 +1046,85 @@ static int http_request_message_complete(php_http_parser *parser)
     return 0;
 }
 
+static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
+{
+    zval send_data;
+    //SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1); 
+    SW_ZVAL_STRINGL(&send_data, str, str_length, 1); 
+
+
+    http_context *ctx = (http_context *)SG(server_context);
+    zval *zrequest_object = ctx->request.zobject;
+    zval *zresponse_object = ctx->response.zobject;
+
+    zval send_retval;
+    zval function_name;
+    ZVAL_STRING(&function_name, "write");
+
+    zval params[1];
+    params[0] = send_data;
+
+    //调用 swoole_server->send() 方法 输出 output
+    class_call_user_method(&send_retval, swoole_http_response_class_entry_ptr, zresponse_object, function_name, 1, params);
+
+    //swNotice("sapi_cli_ub_write, ooooooooooo , %s", str);
+
+    return str_length;
+}
+
+static void sapi_cli_flush(void *server_context) /* {{{ */
+{
+}
+
+static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
+{
+    swWarn("sapi_cli_log_message, %s\n", message);
+}
+
+static int http_request_run(swServer *serv, http_context *ctx)
+{
+    //sapi 的output输出处理赋值
+    sapi_module.ub_write = sapi_cli_ub_write;
+    sapi_module.flush = sapi_cli_flush;
+    sapi_module.log_message = sapi_cli_log_message;
+
+    SG(server_context) = (void *)ctx;
+    
+    if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
+        goto out;
+    }
+
+    zend_file_handle file_handle;
+
+    char *filename = "/var/www/swoole/my_index.php";
+
+    if (zend_stream_open(filename, &file_handle) == FAILURE) {
+        swTrace("execute_file, eeeeeeeeeeee");
+    }
+
+
+    int exit_status = 0;
+
+    php_execute_script(&file_handle);
+    swNotice("execute_file, 6666, %s\n", file_handle.filename);
+
+    swoole_php_request_shutdown();
+
+    swNotice("execute_file, 99999999999, %d\n", exit_status);
+
+out:
+    SG(server_context) = NULL;
+    return exit_status;
+}
+
 static int http_onReceive(swServer *serv, swEventData *req)
 {
     if (swEventData_is_dgram(req->info.type))
     {
         return php_swoole_onReceive(serv, req);
     }
+
+    swNotice("http_onReceive, 1111111111");
 
     int fd = req->info.fd;
     swConnection *conn = swServer_connection_verify_no_ssl(SwooleG.serv, fd);
@@ -1058,17 +1133,25 @@ static int http_onReceive(swServer *serv, swEventData *req)
         swoole_error_log(SW_LOG_NOTICE, SW_ERROR_SESSION_NOT_EXIST, "connection[%d] is closed.", fd);
         return SW_ERR;
     }
+
+    swNotice("http_onReceive, 2222222222");
+
     swListenPort *port = serv->connection_list[req->info.from_fd].object;
     //other server port
     if (!port->open_http_protocol)
     {
         return php_swoole_onReceive(serv, req);
     }
+
+    swNotice("http_onReceive, 3333333333");
+
     //websocket client
     if (conn->websocket_status == WEBSOCKET_STATUS_ACTIVE)
     {
         return swoole_websocket_onMessage(req);
     }
+
+    swNotice("http_onReceive, 4444444444");
 
     swoole_http_client *client = swArray_alloc(http_client_array, conn->fd);
     if (!client)
@@ -1076,6 +1159,7 @@ static int http_onReceive(swServer *serv, swEventData *req)
         return SW_OK;
     }
     client->fd = fd;
+    swNotice("http_onReceive, 55555555");
 
 #ifdef SW_USE_HTTP2
     if (conn->http2_stream)
@@ -1231,6 +1315,8 @@ static int http_onReceive(swServer *serv, swEventData *req)
             return SW_OK;
         }
 #endif
+
+
         if (EG(exception))
         {
             zend_exception_error(EG(exception), E_ERROR TSRMLS_CC);

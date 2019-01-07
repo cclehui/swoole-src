@@ -24,11 +24,6 @@ static PHP_METHOD(swoole_php_runner, run);
 ZEND_BEGIN_ARG_INFO_EX(arginfo_swoole_php_runner_run, 0, 0, 2)
 ZEND_END_ARG_INFO()
 
-extern sapi_module_struct sapi_module;
-
-//全局输出变量  cclehui_test
-zend_string *output_buffer;
-
 
 const zend_function_entry swoole_php_runner_methods[] =
 {
@@ -44,6 +39,55 @@ void swoole_php_runner_init(int module_number TSRMLS_DC)
     swoole_php_runner_class_entry_ptr = zend_register_internal_class(&swoole_php_runner_ce TSRMLS_CC);
     SWOOLE_CLASS_ALIAS(swoole_php_runner, "Swoole\\Fpm\\Server");
 
+}
+
+static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
+{
+    zval send_data;
+    //SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1); 
+    SW_ZVAL_STRINGL(&send_data, str, str_length, 1); 
+
+
+    server_receive_context *receive_context = (server_receive_context *)SG(server_context);
+    zval *zserv = receive_context->zserv;
+
+    zval send_retval;
+    zval function_name;
+    ZVAL_STRING(&function_name, "send");
+
+    zval params[2];
+    params[0] = *(receive_context->zfd);
+    params[1] = send_data;
+
+    //调用 swoole_server->send() 方法 输出 output
+    class_call_user_method(&send_retval, swoole_server_class_entry_ptr, zserv, function_name, 2, params);
+
+    //swNotice("sapi_cli_ub_write, ooooooooooo , %s", str);
+
+    /*
+    if (output_buffer == NULL) {
+        output_buffer = zend_string_init(str, str_length, 0);
+
+    } else {
+        size_t old_length = ZSTR_LEN(output_buffer);
+        output_buffer = zend_string_realloc(output_buffer, old_length + str_length, 0);
+        memcpy(ZSTR_VAL(output_buffer) + old_length, str, str_length);
+    }
+    */
+
+    return str_length;
+}
+
+static void sapi_cli_flush(void *server_context) /* {{{ */
+{
+    if (output_buffer != NULL) {
+        zend_string_free(output_buffer);
+    }
+}
+
+static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
+{
+    swWarn("sapi_cli_log_message, %s\n", message);
 }
 
 
@@ -65,6 +109,11 @@ static PHP_METHOD(swoole_php_runner, run)
         swWarn("serv object is null");
         goto out;
     }
+
+    //sapi 的output输出处理赋值
+    sapi_module.ub_write = sapi_cli_ub_write;
+    sapi_module.flush = sapi_cli_flush;
+    sapi_module.log_message = sapi_cli_log_message;
 
     server_receive_context receive_context; 
     receive_context.zserv = zserv;
@@ -117,6 +166,32 @@ out:
 }
 
 /*****************************************************/
+
+//调用对象中方法
+// zval function_name;
+// ZVAL_STRING(&function_name,"set");
+static zval * class_call_user_method(zval *retval, zend_class_entry *obj_ce, 
+        zval *obj, zval function_name,  uint32_t params_count, zval params[]){ 
+
+    zend_fcall_info fci;  
+
+    fci.size = sizeof(fci);  
+    fci.function_name = function_name;   
+    fci.retval = retval;  
+    fci.params = params;  
+    fci.object =  obj ? Z_OBJ_P(obj) : NULL;;
+    fci.param_count = params_count;  
+    fci.no_separation = 1;  
+
+    int result;
+    result = zend_call_function(&fci, NULL TSRMLS_CC);         //函数调用结束。  
+
+    if (result == FAILURE) {
+        swoole_php_fatal_error(E_ERROR, "function call failed. Error: %s", sw_error);
+    }
+
+    return retval;
+}
 
 /* {{{ php_free_request_globals
  */
@@ -458,55 +533,6 @@ ZEND_API void swoole_zend_deactivate(void) /* {{{ */
 
 
 
-static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
-{
-    zval send_data;
-    //SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1); 
-    SW_ZVAL_STRINGL(&send_data, str, str_length, 1); 
-
-
-    server_receive_context *receive_context = (server_receive_context *)SG(server_context);
-    zval *zserv = receive_context->zserv;
-
-    zval send_retval;
-    zval function_name;
-    ZVAL_STRING(&function_name, "send");
-
-    zval params[2];
-    params[0] = *(receive_context->zfd);
-    params[1] = send_data;
-
-    //调用 swoole_server->send() 方法 输出 output
-    class_call_user_method(&send_retval, swoole_server_class_entry_ptr, zserv, function_name, 2, params);
-
-    //swNotice("sapi_cli_ub_write, ooooooooooo , %s", str);
-
-    /*
-    if (output_buffer == NULL) {
-        output_buffer = zend_string_init(str, str_length, 0);
-
-    } else {
-        size_t old_length = ZSTR_LEN(output_buffer);
-        output_buffer = zend_string_realloc(output_buffer, old_length + str_length, 0);
-        memcpy(ZSTR_VAL(output_buffer) + old_length, str, str_length);
-    }
-    */
-
-    return str_length;
-}
-
-static void sapi_cli_flush(void *server_context) /* {{{ */
-{
-    if (output_buffer != NULL) {
-        zend_string_free(output_buffer);
-    }
-}
-
-static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
-{
-    swWarn("sapi_cli_log_message, %s\n", message);
-}
-
 
 //请求开始前的初始化操作
 //参考 php_request_startup
@@ -517,9 +543,9 @@ static int swoole_php_request_startup() {
     }
 
     //sapi 的output输出处理赋值
-    sapi_module.ub_write = sapi_cli_ub_write;
-    sapi_module.flush = sapi_cli_flush;
-    sapi_module.log_message = sapi_cli_log_message;
+    //sapi_module.ub_write = sapi_cli_ub_write;
+    //sapi_module.flush = sapi_cli_flush;
+    //sapi_module.log_message = sapi_cli_log_message;
 
     //SG(request_info) = NULL;
     SG(sapi_headers).http_response_code = 200; 
