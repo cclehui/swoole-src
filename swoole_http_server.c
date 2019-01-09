@@ -16,7 +16,6 @@
 
 #include "php_swoole.h"
 #include "swoole_http.h"
-#include "swoole_php_runner.h"
 #ifdef SW_COROUTINE
 #include "swoole_coroutine.h"
 #endif
@@ -36,6 +35,8 @@
 #include "websocket.h"
 #include "Connection.h"
 #include "base64.h"
+
+#include "PhpRunner.h"
 
 #ifdef SW_HAVE_ZLIB
 #include <zlib.h>
@@ -1046,6 +1047,7 @@ static int http_request_message_complete(php_http_parser *parser)
     return 0;
 }
 
+
 static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
 {
     zval send_data;
@@ -1054,7 +1056,7 @@ static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
 
 
     http_context *ctx = (http_context *)SG(server_context);
-    zval *zrequest_object = ctx->request.zobject;
+    //zval *zrequest_object = ctx->request.zobject;
     zval *zresponse_object = ctx->response.zobject;
 
     zval send_retval;
@@ -1067,13 +1069,26 @@ static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
     //调用 swoole_server->send() 方法 输出 output
     class_call_user_method(&send_retval, swoole_http_response_class_entry_ptr, zresponse_object, function_name, 1, params);
 
-    //swNotice("sapi_cli_ub_write, ooooooooooo , %s", str);
-
     return str_length;
 }
 
 static void sapi_cli_flush(void *server_context) /* {{{ */
 {
+    http_context *ctx = (http_context *)SG(server_context);
+    zval *zresponse_object = ctx->response.zobject;
+
+    zval send_retval;
+    zval function_name;
+    ZVAL_STRING(&function_name, "end");
+
+    zval send_data;
+    SW_ZVAL_STRINGL(&send_data, "", 0, 1); 
+
+    zval params[1];
+    params[0] = send_data;
+
+    //调用 swoole_server->end() 方法 输出 output
+    class_call_user_method(&send_retval, swoole_http_response_class_entry_ptr, zresponse_object, function_name, 1, params);
 }
 
 static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
@@ -1083,6 +1098,8 @@ static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
 
 static int http_request_run(swServer *serv, http_context *ctx)
 {
+    cclehui_test();
+
     //sapi 的output输出处理赋值
     sapi_module.ub_write = sapi_cli_ub_write;
     sapi_module.flush = sapi_cli_flush;
@@ -1289,9 +1306,11 @@ static int http_onReceive(swServer *serv, swEventData *req)
                 goto free_object;
             }
         }
+        /*
 
 #ifndef SW_COROUTINE
         zcallback = php_swoole_server_get_callback(serv, req->info.from_fd, callback_type);
+        swNotice("http_onReceive, 6666666666");
 #ifdef PHP_SWOOLE_ENABLE_FASTCALL
         zend_fcall_info_cache *fci_cache = php_swoole_server_get_cache(serv, req->info.from_fd, callback_type);
         if (sw_call_user_function_fast(zcallback, fci_cache, &retval, 2, args TSRMLS_CC) == FAILURE)
@@ -1302,6 +1321,7 @@ static int http_onReceive(swServer *serv, swEventData *req)
             swoole_php_error(E_WARNING, "onRequest handler error");
         }
 #else
+        swNotice("http_onReceive, 7777777777");
         zend_fcall_info_cache *cache = php_swoole_server_get_cache(serv, req->info.from_fd, callback_type);
         int ret = coro_create(cache, args, 2, &retval, NULL, NULL);
         if (ret != 0)
@@ -1315,6 +1335,9 @@ static int http_onReceive(swServer *serv, swEventData *req)
             return SW_OK;
         }
 #endif
+        */
+
+        http_request_run(serv, ctx);
 
 
         if (EG(exception))

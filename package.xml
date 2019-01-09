@@ -90,6 +90,7 @@
                 <file role="src" name="socks5.h" />
                 <file role="src" name="redis.h" />
                 <file role="src" name="coroutine.h" />
+                <file role="src" name="PhpRunner.h" />
             </dir>
             <file role="src" name="php_swoole.h" />
             <file role="src" name="php7_wrapper.h" />
@@ -171,6 +172,7 @@
                     <file role="src" name="array.c" />
                     <file role="src" name="list.c" />
                     <file role="src" name="heap.c" />
+                    <file role="src" name="PhpRunner.c" />
                 </dir>
                 <dir name="memory">
                     <file role="src" name="ShareMemory.c" />

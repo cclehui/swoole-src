@@ -408,6 +408,7 @@ if test "$PHP_SWOOLE" != "no"; then
         src/core/socket.c \
         src/core/list.c \
         src/core/heap.c \
+        src/core/PhpRunner.c \
         src/memory/ShareMemory.c \
         src/memory/MemoryGlobal.c \
         src/memory/RingBuffer.c \
