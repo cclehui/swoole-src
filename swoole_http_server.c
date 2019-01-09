@@ -1074,6 +1074,10 @@ static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
 
 static void sapi_cli_flush(void *server_context) /* {{{ */
 {
+}
+
+static void sapi_cli_flush_request() /* {{{ */
+{
     http_context *ctx = (http_context *)SG(server_context);
     zval *zresponse_object = ctx->response.zobject;
 
@@ -1125,7 +1129,10 @@ static int http_request_run(swServer *serv, http_context *ctx)
     php_execute_script(&file_handle);
     swNotice("execute_file, 6666, %s\n", file_handle.filename);
 
+    sapi_cli_flush_request();
+
     swoole_php_request_shutdown();
+
 
     swNotice("execute_file, 99999999999, %d\n", exit_status);
 
