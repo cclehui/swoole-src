@@ -16,11 +16,6 @@
 #include "zend_globals_macros.h"
 #include "Zend/zend_language_scanner.h"
 
-void cclehui_test() {
-    swWarn("cclheui_test_111111111111");
-    
-}
-
 //调用对象中方法
 // zval function_name;
 // ZVAL_STRING(&function_name,"set");

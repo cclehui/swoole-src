@@ -1093,6 +1093,8 @@ static void sapi_cli_flush_request() /* {{{ */
 
     //调用 swoole_server->end() 方法 输出 output
     class_call_user_method(&send_retval, swoole_http_response_class_entry_ptr, zresponse_object, function_name, 1, params);
+
+    swoole_http_context_free(ctx TSRMLS_CC);
 }
 
 static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
@@ -1102,8 +1104,6 @@ static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
 
 static int http_request_run(swServer *serv, http_context *ctx)
 {
-    cclehui_test();
-
     //sapi 的output输出处理赋值
     sapi_module.ub_write = sapi_cli_ub_write;
     sapi_module.flush = sapi_cli_flush;

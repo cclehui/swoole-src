@@ -24,6 +24,5 @@ int swoole_php_request_startup();
 int swoole_php_request_shutdown();
 zval * class_call_user_method(zval *retval, zend_class_entry *obj_ce, 
         zval *obj, zval function_name,  uint32_t params_count, zval params[]); 
-void cclehui_test();
 
 #endif /* SWOOLE_PHP_RUNNER_H_ */
