@@ -111,8 +111,6 @@ static PHP_METHOD(swoole_php_runner, run)
         goto out;
     }
 
-    cclehui_test();
-
     //sapi 的output输出处理赋值
     sapi_module.ub_write = sapi_cli_ub_write;
     sapi_module.flush = sapi_cli_flush;

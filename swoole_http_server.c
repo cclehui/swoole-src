@@ -1111,9 +1111,7 @@ static int http_request_run(swServer *serv, http_context *ctx)
 
     SG(server_context) = (void *)ctx;
     
-    if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
-        goto out;
-    }
+    //php_printf("http_request_run, 11111111111, %p, %p", serv, ctx);
 
     zend_file_handle file_handle;
 
@@ -1123,6 +1121,11 @@ static int http_request_run(swServer *serv, http_context *ctx)
         swTrace("execute_file, eeeeeeeeeeee");
     }
 
+    /*
+    if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
+        goto out;
+    }
+    */
 
     int exit_status = 0;
 
@@ -1131,18 +1134,21 @@ static int http_request_run(swServer *serv, http_context *ctx)
 
     sapi_cli_flush_request();
 
-    swoole_php_request_shutdown();
-
+    //swoole_php_request_shutdown();
 
     swNotice("execute_file, 99999999999, %d\n", exit_status);
 
 out:
-    SG(server_context) = NULL;
+    //SG(server_context) = NULL;
     return exit_status;
 }
 
 static int http_onReceive(swServer *serv, swEventData *req)
 {
+    if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
+        return SW_ERR;
+    }
+
     if (swEventData_is_dgram(req->info.type))
     {
         return php_swoole_onReceive(serv, req);
@@ -1196,6 +1202,7 @@ static int http_onReceive(swServer *serv, swEventData *req)
 #if PHP_MAJOR_VERSION < 7
     TSRMLS_FETCH_FROM_CTX(sw_thread_ctx ? sw_thread_ctx : NULL);
 #endif
+
 
     http_context *ctx = swoole_http_context_new(client TSRMLS_CC);
     php_http_parser *parser = &ctx->parser;
@@ -1367,6 +1374,9 @@ static int http_onReceive(swServer *serv, swEventData *req)
         {
             sw_zval_ptr_dtor(&retval);
         }
+
+        swoole_php_request_shutdown();
+        
     }
     return SW_OK;
 }
