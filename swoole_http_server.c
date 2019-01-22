@@ -1050,6 +1050,7 @@ static int http_request_message_complete(php_http_parser *parser)
 
 static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
 {
+    swWarn("sapi_cli_ub_write, 11111");
     zval send_data;
     //SW_ZVAL_STRING(&send_data, "sssssssssssssssdddddddddddddddd", 1); 
     SW_ZVAL_STRINGL(&send_data, str, str_length, 1); 
@@ -1069,15 +1070,20 @@ static size_t sapi_cli_ub_write(const char *str, size_t str_length) /* {{{ */
     //调用 swoole_server->send() 方法 输出 output
     class_call_user_method(&send_retval, swoole_http_response_class_entry_ptr, zresponse_object, function_name, 1, params);
 
+    swWarn("sapi_cli_ub_write, 999999");
+
     return str_length;
 }
 
 static void sapi_cli_flush(void *server_context) /* {{{ */
 {
+    swWarn("sapi_cli_flush, 11111");
 }
 
 static void sapi_cli_flush_request() /* {{{ */
 {
+    swWarn("sapi_cli_flush_requestx, 11111");
+
     http_context *ctx = (http_context *)SG(server_context);
     zval *zresponse_object = ctx->response.zobject;
 
@@ -1094,7 +1100,8 @@ static void sapi_cli_flush_request() /* {{{ */
     //调用 swoole_server->end() 方法 输出 output
     class_call_user_method(&send_retval, swoole_http_response_class_entry_ptr, zresponse_object, function_name, 1, params);
 
-    swoole_http_context_free(ctx TSRMLS_CC);
+
+    swWarn("sapi_cli_flush_requestx, 99999");
 }
 
 static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
@@ -1111,8 +1118,6 @@ static int http_request_run(swServer *serv, http_context *ctx)
 
     SG(server_context) = (void *)ctx;
     
-    //php_printf("http_request_run, 11111111111, %p, %p", serv, ctx);
-
     zend_file_handle file_handle;
 
     char *filename = "/var/www/swoole/my_index.php";
@@ -1145,6 +1150,7 @@ out:
 
 static int http_onReceive(swServer *serv, swEventData *req)
 {
+    //cclehui_add
     if (UNEXPECTED(swoole_php_request_startup() == FAILURE)) {
         return SW_ERR;
     }
@@ -1351,7 +1357,9 @@ static int http_onReceive(swServer *serv, swEventData *req)
 #endif
         */
 
+        //cclehui_add
         http_request_run(serv, ctx);
+        //swoole_http_context_free(ctx TSRMLS_CC);
 
 
         if (EG(exception))
@@ -1375,6 +1383,7 @@ static int http_onReceive(swServer *serv, swEventData *req)
             sw_zval_ptr_dtor(&retval);
         }
 
+        //cclehui_add
         swoole_php_request_shutdown();
         
     }

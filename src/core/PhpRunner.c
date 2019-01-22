@@ -22,6 +22,10 @@
 zval * class_call_user_method(zval *retval, zend_class_entry *obj_ce, 
         zval *obj, zval function_name,  uint32_t params_count, zval params[]){ 
 
+    if (obj == NULL) {
+        return retval;
+    }
+
     zend_fcall_info fci;  
 
     fci.size = sizeof(fci);  
