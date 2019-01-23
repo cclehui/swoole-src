@@ -1109,18 +1109,26 @@ static void sapi_cli_log_message(char *message, int syslog_type_int) /* {{{ */
     swWarn("sapi_cli_log_message, %s\n", message);
 }
 
+static int sapi_cgi_send_headers(sapi_headers_struct *sapi_headers) /* {{{ */
+{
+
+	return 1;
+}
+
 static int http_request_run(swServer *serv, http_context *ctx)
 {
     //sapi 的output输出处理赋值
     sapi_module.ub_write = sapi_cli_ub_write;
     sapi_module.flush = sapi_cli_flush;
     sapi_module.log_message = sapi_cli_log_message;
+    sapi_module.send_headers = sapi_cgi_send_headers;
 
     SG(server_context) = (void *)ctx;
     
     zend_file_handle file_handle;
 
-    char *filename = "/var/www/swoole/my_index.php";
+    //char *filename = "/var/www/swoole/my_index.php";
+    char *filename = "/var/www/wordpress/index.php";
 
     if (zend_stream_open(filename, &file_handle) == FAILURE) {
         swTrace("execute_file, eeeeeeeeeeee");

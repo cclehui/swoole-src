@@ -163,7 +163,8 @@ static int zend_close_rsrc(zval *zv)
 	zend_resource *res = Z_PTR_P(zv);
 
 	if (res->type >= 0) {
-		zend_resource_dtor(res);
+		//zend_resource_dtor(res);
+        zend_list_free(res);
 	}
 	return ZEND_HASH_APPLY_KEEP;
 }
